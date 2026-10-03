@@ -1,5 +1,7 @@
 import duckdb
 import pandas as pd
+import os
+import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -64,6 +66,11 @@ def train_churn_model():
     print(f"Precision:                {precision_score(y_test, y_pred, zero_division=0):.2f}")
     print(f"Recall:                   {recall_score(y_test, y_pred, zero_division=0):.2f}")
     print(f"F1-Score:                 {f1_score(y_test, y_pred, zero_division=0):.2f}")
+
+    # Save Model Artifact for API Serving
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(model, "models/churn_model.pkl")
+    print("💾 Saved trained model artifact to models/churn_model.pkl")
 
 if __name__ == "__main__":
     train_churn_model()
