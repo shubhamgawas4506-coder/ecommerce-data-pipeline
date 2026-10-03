@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.log
+output/
+raw_orders_sample.json
+.DS_Store
