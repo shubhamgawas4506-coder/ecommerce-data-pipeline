@@ -1,7 +1,5 @@
 import duckdb
 import pandas as pd
-import os
-import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -9,7 +7,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 def train_churn_model():
     parquet_path = "output/curated_orders/curated_orders.parquet"
     
-    # Feature Engineering: Extract Customer-Level RFM Metrics using DuckDB
+    # 1. RFM Feature Extraction via DuckDB
     query = f"""
         WITH customer_summary AS (
             SELECT 
@@ -27,14 +25,15 @@ def train_churn_model():
         )
         SELECT 
             cs.customer_id,
-            DATEDIFF('day', cs.last_order_date, md.global_max_date) AS recency_days,
+            CAST(DATEDIFF('day', cs.last_order_date, md.global_max_date) AS INT) AS recency_days,
             cs.frequency,
             cs.total_spend,
             cs.avg_order_value,
             cs.cancelled_orders,
+            -- Clean Business Logic for Synthetic Ground Truth
             CASE 
-                WHEN DATEDIFF('day', cs.last_order_date, md.global_max_date) > 12 
-                     OR (cs.cancelled_orders * 1.0 / cs.frequency) >= 0.3 THEN 1 
+                WHEN DATEDIFF('day', cs.last_order_date, md.global_max_date) >= 10 
+                     OR (cs.cancelled_orders * 1.0 / cs.frequency) >= 0.25 THEN 1 
                 ELSE 0 
             END AS is_churn
         FROM customer_summary cs, max_date_cte md;
@@ -50,15 +49,20 @@ def train_churn_model():
     X = df[features]
     y = df['is_churn']
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+    # 2. Train-Test Split with Stratification
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, random_state=42, stratify=y
+    )
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    # 3. Controlled Random Forest Classifier
+    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
     model.fit(X_train, y_train)
 
+    # 4. Evaluation
     y_pred = model.predict(X_test)
     
     print("==========================================")
-    print("🤖 E-Commerce Customer Churn Model Results")
+    print("🤖 Churn Machine Learning Model Summary")
     print("==========================================")
     print(f"Total Customers Analyzed: {len(df)}")
     print(f"Total Churned Customers:  {y.sum()} ({(y.sum()/len(df))*100:.1f}%)")
@@ -66,11 +70,6 @@ def train_churn_model():
     print(f"Precision:                {precision_score(y_test, y_pred, zero_division=0):.2f}")
     print(f"Recall:                   {recall_score(y_test, y_pred, zero_division=0):.2f}")
     print(f"F1-Score:                 {f1_score(y_test, y_pred, zero_division=0):.2f}")
-
-    # Save Model Artifact for API Serving
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(model, "models/churn_model.pkl")
-    print("💾 Saved trained model artifact to models/churn_model.pkl")
 
 if __name__ == "__main__":
     train_churn_model()

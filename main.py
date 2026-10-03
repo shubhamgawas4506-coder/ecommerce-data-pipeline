@@ -23,25 +23,29 @@ logger.addHandler(stream_handler)
 logger.addHandler(file_handler)
 
 def run_pipeline():
-    logging.info("[START] Starting E-commerce Data & ML Churn Pipeline...")
+    logging.info("[START] Starting Data Pipeline & ML Execution...")
     
     try:
-        logging.info("[Phase 1] Generating raw transactional order batch...")
+        # Step 1: Ingestion
+        logging.info("[Phase 1] Ingesting raw JSON transactional events...")
         generate_batch(num_records=1000, output_path="raw_orders_sample.json")
         
+        # Step 2: ETL Transformation
         logging.info("[Phase 2] Running ETL process and exporting Parquet...")
         process_orders()
         
-        logging.info("[Phase 3] Executing SQL Data Warehouse analytics...")
+        # Step 3: Data Warehousing
+        logging.info("[Phase 3] Executing DuckDB SQL warehouse queries...")
         run_analytics()
         
-        logging.info("[Phase 4] Training Customer Churn ML Model...")
+        # Step 4: Machine Learning
+        logging.info("[Phase 4] Training Customer Churn ML model...")
         train_churn_model()
         
-        logging.info("[SUCCESS] Complete End-to-End Pipeline execution finished!")
+        logging.info("[SUCCESS] Pipeline completed successfully!")
         
     except Exception as e:
-        logging.error(f"[ERROR] Pipeline failed: {str(e)}")
+        logging.error(f"[ERROR] Pipeline execution failed: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":

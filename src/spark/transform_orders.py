@@ -1,36 +1,35 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, year, month, dayofmonth, to_timestamp
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import json
 import os
 
-def process_orders_pyspark():
-    # Initialize PySpark Session
-    spark = SparkSession.builder \
-        .appName("EcommerceSparkETL") \
-        .master("local[*]") \
-        .getOrCreate()
-
+def process_orders():
     raw_path = "raw_orders_sample.json"
     output_dir = "output/curated_orders"
+    os.makedirs(output_dir, exist_ok=True)
 
-    # 1. Read Raw JSON into PySpark DataFrame
-    df = spark.read.json(raw_path)
+    # Safely load JSON whether array or line-delimited (NDJSON)
+    data = []
+    with open(raw_path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+        if content.startswith("["):
+            data = json.loads(content)
+        else:
+            data = [json.loads(line) for line in content.splitlines() if line.strip()]
 
-    # 2. PySpark Data Cleaning & Transformations
-    cleaned_df = df.filter(col("order_id").isNotNull()) \
-                   .filter((col("quantity") > 0) & (col("unit_price") > 0)) \
-                   .withColumn("order_timestamp", to_timestamp(col("order_timestamp"))) \
-                   .withColumn("year", year(col("order_timestamp"))) \
-                   .withColumn("month", month(col("order_timestamp"))) \
-                   .withColumn("day", dayofmonth(col("order_timestamp")))
+    df = pd.DataFrame(data)
+    
+    # Data Cleaning & Type Formatting
+    df = df.dropna(subset=["order_id"])
+    df = df[(df["quantity"] > 0) & (df["unit_price"] > 0)]
+    df["order_timestamp"] = pd.to_datetime(df["order_timestamp"])
 
-    # 3. Write Partitioned Parquet Data
-    cleaned_df.write \
-        .mode("overwrite") \
-        .partitionBy("year", "month") \
-        .parquet(output_dir)
+    # Export to Parquet format
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, os.path.join(output_dir, "curated_orders.parquet"))
 
-    print(f"✅ PySpark: Transformed {cleaned_df.count()} records into partitioned Parquet format!")
-    spark.stop()
+    print(f"✅ Transformed {len(df)} records into Parquet format!")
 
 if __name__ == "__main__":
-    process_orders_pyspark()
+    process_orders()
